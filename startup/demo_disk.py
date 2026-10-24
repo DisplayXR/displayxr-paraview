@@ -46,6 +46,7 @@ view.CameraViewUp = [0.0, 0.0, 1.0]
 ResetCamera(view)
 Render(view)
 
+# Test harness hook (not part of this repo; the launcher never sets it).
 if os.environ.get("DXR_PV_DEV_INBOX"):
     import dev_inbox
 
