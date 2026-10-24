@@ -25,6 +25,19 @@ smaller than the 2D view rather than too strong. Click **Start 3D** again to re-
 eye separation to the current view, for
 example after zooming far in or out.
 
+## Omniverse
+
+- **Send to Omniverse** writes the render view's visible scene to
+  `Documents\DisplayXR-ParaView\paraview_live.usda` with ParaView's own USD exporter (no
+  NVIDIA connector needed; NVIDIA's ParaView Connector lists ParaView 5.12 only).
+- **Omniverse Live** toggles re-export whenever the visible scene or time changes.
+- The stage is written upright in Kit's default layout (Y-up, cm, one root prim
+  `/ParaView` as defaultPrim), so you can reference it in USD Composer as is. Turn on layer
+  auto-reload to see ParaView edits live. `DXR_PV_USD_PATH` and
+  `DXR_PV_USD_METERS_PER_UNIT` override the path and units.
+- ParaView's 3D and USD Composer's 3D viewport (with `displayxr.omniverse`) weave at the
+  same time, each in its own window.
+
 ## How it works
 
 ParaView ships VTK's OpenXR module in its Python. `python/displayxr_paraview.py`:
