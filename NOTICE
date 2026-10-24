@@ -1,0 +1,10 @@
+DisplayXR for ParaView
+Copyright (c) 2026 The DisplayXR Project and its contributors
+
+This product includes software developed by the DisplayXR project contributors.
+It is licensed under the Apache License, Version 2.0; see the LICENSE file for
+the full text.
+
+openxr/*.json are derived from ParaView's XRInterface plug-in action manifests
+(Copyright (c) Kitware, Inc., BSD 3-Clause License), with the actions only that
+plug-in's XR menu uses removed.
