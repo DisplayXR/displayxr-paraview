@@ -19,7 +19,10 @@ their own windows at the same time.
    `Launch-ParaView-DisplayXR.cmd your.pvsm` for your own state or data.
 4. Click **Start 3D** on the Macros toolbar.
 
-Click **Start 3D** again while 3D is active to re-fit the depth to the current view, for
+Depth stays inside the display's comfort budget as you zoom or change the data: the scene
+moves forward or back to fit, and when you zoom into a very deep region the 3D is shown
+smaller than the 2D view rather than too strong. Click **Start 3D** again to re-fit the
+eye separation to the current view, for
 example after zooming far in or out.
 
 ## How it works

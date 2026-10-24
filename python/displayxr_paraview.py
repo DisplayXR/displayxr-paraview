@@ -87,8 +87,9 @@ class _Session:
         self.observer = None
         self.window = None
         self.rig = None
-        self.glass_shift = 0.0
         self.eye = coupling.RIG_EYE_POSITION
+        self._depth_key = None
+        self._depth_range = (0.0, 0.0)
         self.frames = 0
         self.started = time.time()
 
@@ -115,17 +116,8 @@ class _Session:
         half_world = dist * math.tan(math.radians(cam.GetViewAngle()) / 2.0)
         scale = half_world / (canvas_h / 2.0)
 
-        bounds = self.pv_renderer.ComputeVisiblePropBounds()
-        if bounds[0] > bounds[1]:
-            near_m, far_m = -0.02, 0.02
-        else:
-            depths = []
-            for i in (0, 1):
-                for j in (2, 3):
-                    for k in (4, 5):
-                        p = (bounds[i], bounds[j], bounds[k])
-                        depths.append(_dot([p[n] - fp[n] for n in range(3)], dop) / scale)
-            near_m, far_m = min(depths), max(depths)
+        near_w, far_w = self._view_depths(fp, dop)
+        near_m, far_m = (near_w / scale, far_w / scale) if far_w > near_w else (-0.02, 0.02)
         # Never past the viewer: clamp the near side to half the viewing distance.
         near_m = max(near_m, -0.5 * VIEWER_DISTANCE_M)
         far_m = max(far_m, near_m + 1e-4)
@@ -155,7 +147,7 @@ class _Session:
         baseline = (1.0 / need) if need > 0 else NOMINAL_IPD_M
         ipd_factor = min(1.0, self.depth_strength * baseline / NOMINAL_IPD_M)
         vfov = 2.0 * math.atan(canvas_h / 2.0 / C)
-        self.glass_shift = shift * scale  # world units along the view direction
+
         return {
             "convergenceMeters": C,
             "verticalFov": vfov,
@@ -168,26 +160,101 @@ class _Session:
     # -- 3D <- ParaView camera ----------------------------------------------------------
 
     def _sync_camera(self):
+        """Map ParaView's camera onto the rig, keeping the scene inside the comfort budget.
+
+        The eye separation is fixed for the session (set at Start 3D), so as the user zooms
+        or the data changes, this re-solves every frame where the scene sits: the focal
+        point stays on the glass when it can, the scene moves forward or back just enough
+        that its nearest point stays within the front budget and its farthest within the
+        behind budget, and only when the scene is deeper than the budget allows at the 2D
+        view's size is the 3D shown smaller than the 2D view."""
         cam = self.pv_renderer.GetActiveCamera()
         dop = _normalize(cam.GetDirectionOfProjection())
         up = list(cam.GetViewUp())
         up = _normalize([up[i] - _dot(up, dop) * dop[i] for i in range(3)])
         x = _cross(up, [-d for d in dop])
         fp = cam.GetFocalPoint()
-        glass = [fp[i] + self.glass_shift * dop[i] for i in range(3)]
         half_world = cam.GetDistance() * math.tan(math.radians(cam.GetViewAngle()) / 2.0)
         scale = half_world / (self.rig["_canvas_m"][1] / 2.0)
-        # Physical point on the glass: straight ahead of the rig's eye at the convergence distance.
+
+        C = self.rig["convergenceMeters"]
+        b = self.rig["ipdFactor"] * NOMINAL_IPD_M
+        f, g = FRONT_BUDGET_MM * 1e-3, BEHIND_BUDGET_MM * 1e-3
+        z_min = b * C / (b + f)  # nearest distance within the front budget
+        z_max = b * C / (b - g) if b > g else float("inf")
+        near_w, far_w = self._view_depths(fp, dop)
+        depth_w = far_w - near_w
+        if depth_w / scale > z_max - z_min:
+            scale = depth_w / (z_max - z_min)
+        z_near = min(max(C + near_w / scale, z_min), z_max - depth_w / scale)
+        z_focal = z_near - near_w / scale
+
+        # The focal point goes straight ahead of the rig's eye, z_focal away.
         eye = self.eye
-        p = [eye[0], eye[1], eye[2] - self.rig["convergenceMeters"]]
+        p = [eye[0], eye[1], eye[2] - z_focal]
         m = vtkMatrix4x4()
         axes = (x, up, [-d for d in dop])
         for row in range(3):
             for col in range(3):
                 m.SetElement(row, col, axes[col][row] * scale)
-            # world = S*R*phys + t  with  S*R*p = glass - t
-            m.SetElement(row, 3, glass[row] - scale * sum(axes[c][row] * p[c] for c in range(3)))
+            # world = S*R*phys + t  with  S*R*p = fp - t
+            m.SetElement(row, 3, fp[row] - scale * sum(axes[c][row] * p[c] for c in range(3)))
         self.window.SetPhysicalToWorldMatrix(m)
+
+    def _view_depths(self, fp, dop):
+        """Depth range of what the camera actually sees, along the view direction relative to
+        the focal point, in world units: a grid over each visible prop's bounds, kept only
+        where it falls inside the camera's frustum (zoomed in, most of the data is out of
+        view and must not limit the depth). Cached until the camera or the props change."""
+        cam = self.pv_renderer.GetActiveCamera()
+        key = (cam.GetMTime(), self.pv_renderer.GetViewProps().GetMTime(), self.prop_data_mtime())
+        if key == self._depth_key:
+            return self._depth_range
+        aspect = self.rig["_canvas_m"][0] / self.rig["_canvas_m"][1]
+        tan_v = math.tan(math.radians(cam.GetViewAngle()) / 2.0) * 1.05
+        tan_h = tan_v * aspect
+        pos = cam.GetPosition()
+        up = list(cam.GetViewUp())
+        up = _normalize([up[i] - _dot(up, dop) * dop[i] for i in range(3)])
+        right = _cross(dop, up)
+        steps = [i / 4.0 for i in range(5)]
+        near, far, all_depths = None, None, []
+        for p in self._pv_props():
+            if not p.GetVisibility() or not hasattr(p, "GetBounds"):
+                continue
+            b = p.GetBounds()
+            if b is None or b[0] > b[1]:
+                continue
+            for u in steps:
+                for v in steps:
+                    for w in steps:
+                        q = (b[0] + u * (b[1] - b[0]), b[2] + v * (b[3] - b[2]), b[4] + w * (b[5] - b[4]))
+                        rel = [q[n] - pos[n] for n in range(3)]
+                        z = _dot(rel, dop)
+                        depth = z - cam.GetDistance()
+                        all_depths.append(depth)
+                        if z <= 0 or abs(_dot(rel, right)) > z * tan_h or abs(_dot(rel, up)) > z * tan_v:
+                            continue
+                        near = depth if near is None else min(near, depth)
+                        far = depth if far is None else max(far, depth)
+        if near is None:  # nothing in view: fall back to everything
+            near, far = (min(all_depths), max(all_depths)) if all_depths else (0.0, 0.0)
+        self._depth_key, self._depth_range = key, (near, far)
+        return near, far
+
+    def _pv_props(self):
+        props = self.pv_renderer.GetViewProps()
+        props.InitTraversal()
+        return [props.GetNextProp() for _ in range(props.GetNumberOfItems())]
+
+    def prop_data_mtime(self):
+        t = 0
+        for p in self._pv_props():
+            mapper = p.GetMapper() if hasattr(p, "GetMapper") else None
+            inp = mapper.GetInputDataObject(0, 0) if mapper is not None else None
+            if inp is not None:
+                t = max(t, inp.GetMTime())
+        return t
 
     def _measure_eye(self):
         """Log where the tracked eye is. The mapping keeps the rig's *nominal* eye: the
@@ -219,6 +286,7 @@ class _Session:
     # -- lifecycle ----------------------------------------------------------------------
 
     def start(self):
+        self.rig = {"_canvas_m": list(self._canvas_metres())}
         self.rig = self._fit_depth()
         coupling.write_rig_profile({k: v for k, v in self.rig.items() if not k.startswith("_")})
         _log(

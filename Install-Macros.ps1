@@ -16,3 +16,6 @@ import displayxr_paraview
 
 Set-Content -Encoding UTF8 (Join-Path $macros "Start 3D.py") ($header + "`ndisplayxr_paraview.start()`n")
 Set-Content -Encoding UTF8 (Join-Path $macros "Exit 3D.py") ($header + "`ndisplayxr_paraview.stop()`n")
+# Omniverse: one-shot USD export, and live export (toggle) for USD Composer.
+Set-Content -Encoding UTF8 (Join-Path $macros "Send to Omniverse.py") ($header + "`nimport omniverse_link`nomniverse_link.send()`n")
+Set-Content -Encoding UTF8 (Join-Path $macros "Omniverse Live.py") ($header + "`nimport omniverse_link`nomniverse_link.toggle_live()`n")
