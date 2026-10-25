@@ -11,6 +11,7 @@ reference/sublayer); with Kit's layer auto-reload on, edits in ParaView show up 
 """
 
 import os
+import re
 import time
 
 from paraview import simple
@@ -21,6 +22,7 @@ DEFAULT_PATH = os.path.join(os.path.expanduser("~"), "Documents", "DisplayXR-Par
 SETTLE_S = 0.6
 
 _live = {}
+_state = {}
 
 
 def _log(msg):
@@ -31,10 +33,15 @@ def _log(msg):
 METERS_PER_UNIT = float(os.environ.get("DXR_PV_USD_METERS_PER_UNIT", "0.01"))
 
 
-def _kit_layout(stage_path, view):
+def _kit_layout(stage_path, view, textures):
     """Wrap the exported stage in one root Xform, upright in Kit's default layout (Y-up)
     and with a defaultPrim, so referencing it in USD Composer needs no fix-up: Kit does
-    not convert the axis or units of a reference. The up axis is the camera's view-up."""
+    not convert the axis or units of a reference. The up axis is the camera's view-up.
+
+    Also rebases the exporter's absolute prim paths (material bindings, shader
+    connections) under the new root, and points texture assets at `textures`
+    ({absolute path as written: new relative file name}), so materials survive both the
+    wrapping and the move out of the staging folder."""
     up = view.GetActiveCamera().GetViewUp()
     axis = max(range(3), key=lambda i: abs(up[i]))
     sign = 1 if up[axis] > 0 else -1
@@ -43,6 +50,9 @@ def _kit_layout(stage_path, view):
     with open(stage_path, "r", encoding="utf-8") as f:
         text = f.read()
     first, _, body = text.partition("\n")
+    body = re.sub(r"</(?!ParaView[/>])", "</ParaView/", body)
+    for written, name in textures.items():
+        body = body.replace("@" + written + "@", "@./" + name + "@")
     with open(stage_path, "w", encoding="utf-8") as f:
         f.write(first + "\n(\n")
         f.write('    defaultPrim = "ParaView"\n    metersPerUnit = %g\n    upAxis = "Y"\n)\n\n' % METERS_PER_UNIT)
@@ -76,12 +86,34 @@ def send(path=None, view=None):
     t0 = time.time()
     # Write next to the target under the same name (texture files are named after the
     # stage), then move textures first and the stage last, each an atomic replace.
-    simple.ExportView(os.path.join(staging, os.path.basename(path)), view=view)
+    stage_name = os.path.basename(path)
+    for f in os.listdir(staging):
+        os.remove(os.path.join(staging, f))
+    simple.ExportView(os.path.join(staging, stage_name), view=view)
+    # Textures get a new name per export: RTX caches textures by path, so a colour-map
+    # change written to the same file name may not show.
+    # Unique across ParaView restarts too (a counter would reuse names after a restart).
+    _state["serial"] = max(_state.get("serial", 0) + 1, int(time.time() * 10))
+    textures = {}
+    for f in os.listdir(staging):
+        if f != stage_name:
+            root, ext = os.path.splitext(f)
+            new = "%s_%d%s" % (root, _state["serial"], ext)
+            os.rename(os.path.join(staging, f), os.path.join(staging, new))
+            textures[os.path.join(staging, f).replace("\\", "/")] = new
     if path.endswith(".usda"):
-        _kit_layout(os.path.join(staging, os.path.basename(path)), view)
-    files = sorted(os.listdir(staging), key=lambda f: f == os.path.basename(path))
-    for f in files:
+        _kit_layout(os.path.join(staging, stage_name), view, textures)
+    for f in textures.values():
         _replace(os.path.join(staging, f), os.path.join(folder, f))
+    _replace(os.path.join(staging, stage_name), os.path.join(folder, stage_name))
+    # Textures of earlier exports: nothing references them once the new stage is in place.
+    prefix = os.path.splitext(stage_name)[0] + "_tex"
+    for f in os.listdir(folder):
+        if f.startswith(prefix) and f not in textures.values():
+            try:
+                os.remove(os.path.join(folder, f))
+            except OSError:
+                pass
     _log("exported %s (%.0f KB, %.2f s)" % (path, os.path.getsize(path) / 1024.0, time.time() - t0))
     return path
 
