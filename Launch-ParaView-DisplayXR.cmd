@@ -26,6 +26,10 @@ if exist "%DEV_RUNTIME%" (
 )
 set DXR_HOSTED_WINDOW=auto
 set DXR_HOSTED_INPUT=app
+rem A gamepad drives ParaView's own camera (python\gamepad.py), not the runtime's fly camera
+rem or emulated VR hands, which would move the 3D away from ParaView's view.
+set DXR_INPUT_GAMEPAD_NAV=0
+set DXR_INPUT_GAMEPAD_EMULATE_CONTROLLERS=0
 
 rem Camera rig for the 3D view; rewritten at every Start 3D to fit the scene's depth to the display.
 if not exist "%LOCALAPPDATA%\DisplayXR-ParaView" mkdir "%LOCALAPPDATA%\DisplayXR-ParaView"

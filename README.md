@@ -33,6 +33,22 @@ shared DisplayXR depth slider, which needs the dev runtime's `DXR_HostedDepth`, 
 - Focus 0.60 m means ParaView's focal point sits on the glass. Nearer brings it out of
   the screen, farther sinks it in, always within the comfort budget.
 
+## Gamepad
+
+While 3D is active, an Xbox-style pad drives ParaView's camera, the same camera the mouse
+uses:
+
+| Pad | |
+|---|---|
+| left stick | orbit about the focal point |
+| right stick | pan |
+| right / left trigger | zoom in / out |
+| A | reset the camera to the visible data |
+
+The sticks move the scene the way dragging the mouse does. The pad only acts while ParaView
+is the foreground window. The launcher turns off DisplayXR's own pad fly camera for
+ParaView (`DXR_INPUT_GAMEPAD_NAV=0`), because it would move the 3D away from ParaView's view.
+
 ## Omniverse
 
 - **Omniverse Live** writes the render view's visible scene to
@@ -99,6 +115,7 @@ display info has no comfort field yet.
 |---|---|
 | `Launch-ParaView-DisplayXR.cmd` | launcher: runtime selection, env, macros, follower |
 | `python/displayxr_paraview.py` | Start/Exit 3D, camera sync, depth fit |
+| `python/gamepad.py` | gamepad navigation of ParaView's camera |
 | `python/coupling.py` | every DisplayXR / ParaView internal relied on ("not a contract") |
 | `Follow-ParaView.ps1` | publishes the render view rect to the runtime |
 | `Install-Macros.ps1` | adds Start 3D / Exit 3D to ParaView's Macros toolbar |

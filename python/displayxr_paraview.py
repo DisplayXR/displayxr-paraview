@@ -35,6 +35,7 @@ from vtkmodules.vtkRenderingOpenXR import (
 )
 
 import coupling
+import gamepad
 
 #: Comfort budget, on-screen disparity as a fraction of the panel's width in front of
 #: and behind the glass (calibrated with the user on Leia SR, 2026-10-23). DisplayXR's
@@ -360,6 +361,8 @@ class _Session:
             return False
         self._update_props()
         self._sync_camera()
+        self.nav = gamepad.Navigator(self.view, coupling.main_window())
+        self.last_tick = time.time()
         self.observer = self.pv_interactor.AddObserver(vtkCommand.TimerEvent, self._tick)
         self.timer_id = self.pv_interactor.CreateRepeatingTimer(FRAME_MS)
         coupling.set_status("3D active")
@@ -370,6 +373,9 @@ class _Session:
         if self.window is None:
             return
         try:
+            now = time.time()
+            self.nav.update(now - self.last_tick)
+            self.last_tick = now
             self._update_props()
             self._sync_camera()
             self.interactor.DoOneEvent(self.window, self.renderer)
