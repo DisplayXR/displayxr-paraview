@@ -67,6 +67,28 @@ def read_view_rect():
     return (v & 0xFFFF, (v >> 16) & 0xFFFF, (v >> 32) & 0xFFFF, (v >> 48) & 0xFFFF)
 
 
+#: Live depth (DisplayXR #2350): strength*1000 | convergence_mm << 16 on the host window,
+#: strength relative to the rig the app seeded. The runtime applies the "Rel" value
+#: (written by the shared depth slider) and publishes what is in effect as "RelNow".
+DEPTH_REL_PROP = "DXR_HostedDepthRel"
+DEPTH_REL_NOW_PROP = "DXR_HostedDepthRelNow"
+_user32.SetPropW.argtypes = [wt.HWND, wt.LPCWSTR, wt.HANDLE]
+
+
+def read_depth_rel_now(hwnd):
+    """(relative strength, convergence m) the runtime has in effect, or None."""
+    v = (_user32.GetPropW(hwnd, DEPTH_REL_NOW_PROP) or 0) if hwnd else 0
+    if not v:
+        return None
+    return (v & 0xFFFF) / 1000.0, ((v >> 16) & 0xFFFF) / 1000.0
+
+
+def write_depth_rel(hwnd, strength, convergence_m):
+    if hwnd:
+        v = min(int(round(strength * 1000)), 0xFFFF) | (min(int(round(convergence_m * 1000)), 0xFFFF) << 16)
+        _user32.SetPropW(hwnd, DEPTH_REL_PROP, v)
+
+
 def panel_geometry():
     """Panel size in metres and pixels, from displayxr-cli (cached), else the Leia demo panel."""
     global _panel

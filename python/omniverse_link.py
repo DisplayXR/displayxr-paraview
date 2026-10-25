@@ -53,6 +53,14 @@ def _kit_layout(stage_path, view, textures):
     body = re.sub(r"</(?!ParaView[/>])", "</ParaView/", body)
     for written, name in textures.items():
         body = body.replace("@" + written + "@", "@./" + name + "@")
+    # The colour-map lookup coordinates run slightly outside [0, 1] for values beyond the
+    # colour range; ParaView clamps there, USD's default wrap repeats (dark, wrong colours).
+    body = body.replace(
+        'uniform token info:id = "UsdUVTexture"\n',
+        'uniform token info:id = "UsdUVTexture"\n'
+        '        token inputs:wrapS = "clamp"\n'
+        '        token inputs:wrapT = "clamp"\n',
+    )
     with open(stage_path, "w", encoding="utf-8") as f:
         f.write(first + "\n(\n")
         f.write('    defaultPrim = "ParaView"\n    metersPerUnit = %g\n    upAxis = "Y"\n)\n\n' % METERS_PER_UNIT)

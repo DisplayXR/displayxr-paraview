@@ -36,10 +36,16 @@ set PYTHONPATH=%~dp0python;%PYTHONPATH%
 pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install-Macros.ps1"
 
 if "%~1"=="" (
-	start "" "%PARAVIEW_HOME%\bin\paraview.exe" --script="%~dp0startup\demo_disk.py"
+	start "" /max "%PARAVIEW_HOME%\bin\paraview.exe" --script="%~dp0startup\demo_disk.py"
 ) else (
-	start "" "%PARAVIEW_HOME%\bin\paraview.exe" %*
+	start "" /max "%PARAVIEW_HOME%\bin\paraview.exe" %*
 )
 
 rem Keeps the 3D exactly on ParaView's render view (publishes its rect to the runtime).
 start "" /min pwsh -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0Follow-ParaView.ps1"
+
+rem Live Depth / Focus slider in the empty right end of ParaView's menu bar (shared DisplayXR
+rem tool, needs the dev runtime's DXR_HostedDepth, DisplayXR #2350). 100 %% = the comfort budget
+rem filled; ParaView caps it there.
+set SLIDER=%USERPROFILE%\.claude\skills\displayxr-compat\tools\DisplayXR-DepthSlider.ps1
+if exist "%SLIDER%" start "" /min pwsh -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%SLIDER%" -Process paraview -RightGap 40 -Top 2 -Height 58

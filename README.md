@@ -25,12 +25,21 @@ smaller than the 2D view rather than too strong. Click **Start 3D** again to re-
 eye separation to the current view, for
 example after zooming far in or out.
 
+The **Depth / Focus** slider at the right end of the menu bar changes the 3D live (the
+shared DisplayXR depth slider, which needs the dev runtime's `DXR_HostedDepth`, #2350):
+
+- Depth 100 % means the comfort budget is filled for what's in view. Lower is flatter.
+  Higher is capped back to 100 %, so the slider can't make ParaView uncomfortable.
+- Focus 0.60 m means ParaView's focal point sits on the glass. Nearer brings it out of
+  the screen, farther sinks it in, always within the comfort budget.
+
 ## Omniverse
 
-- **Send to Omniverse** writes the render view's visible scene to
-  `Documents\DisplayXR-ParaView\paraview_live.usda` with ParaView's own USD exporter (no
-  NVIDIA connector needed; NVIDIA's ParaView Connector lists ParaView 5.12 only).
-- **Omniverse Live** toggles re-export whenever the visible scene or time changes.
+- **Omniverse Live** writes the render view's visible scene to
+  `Documents\DisplayXR-ParaView\paraview_live.usda` with ParaView's own USD exporter, and
+  re-exports whenever the visible scene or time changes, until you press it again. No
+  NVIDIA connector needed: NVIDIA's ParaView Connector lists ParaView 5.12 only.
+  `omniverse_link.send()` does a one-off export.
 - The stage is written upright in Kit's default layout (Y-up, cm, one root prim
   `/ParaView` as defaultPrim), so you can reference it in USD Composer as is. Turn on layer
   auto-reload to see ParaView edits live. `DXR_PV_USD_PATH` and

@@ -88,6 +88,8 @@ class _Session:
         self.window = None
         self.rig = None
         self.eye = coupling.RIG_EYE_POSITION
+        self.host = coupling.main_window()
+        self.focus_set = False
         self._depth_key = None
         self._depth_range = (0.0, 0.0)
         self.frames = 0
@@ -175,18 +177,28 @@ class _Session:
         x = _cross(up, [-d for d in dop])
         fp = cam.GetFocalPoint()
         half_world = cam.GetDistance() * math.tan(math.radians(cam.GetViewAngle()) / 2.0)
-        scale = half_world / (self.rig["_canvas_m"][1] / 2.0)
 
-        C = self.rig["convergenceMeters"]
-        b = self.rig["ipdFactor"] * NOMINAL_IPD_M
-        f, g = FRONT_BUDGET_MM * 1e-3, BEHIND_BUDGET_MM * 1e-3
+        # The depth in effect: the shared depth slider (DXR_HostedDepthRel) changes the
+        # rig's eye separation and convergence live, in the runtime.
+        strength, C = self._live_depth()
+        # Rig metres per metre in front of the real panel: the rig's glass is at C, the
+        # real one at the viewing distance.
+        k = C / VIEWER_DISTANCE_M
+        scale = half_world / (self.rig["_canvas_m"][1] / 2.0 * k)
+        b = self.rig["ipdFactor"] * NOMINAL_IPD_M * strength
+        # Budgets in rig metres; below 100 % the slider scales them, so it scales the depth.
+        f = FRONT_BUDGET_MM * 1e-3 * k * min(strength, 1.0)
+        g = BEHIND_BUDGET_MM * 1e-3 * k * min(strength, 1.0)
         z_min = b * C / (b + f)  # nearest distance within the front budget
         z_max = b * C / (b - g) if b > g else float("inf")
         near_w, far_w = self._view_depths(fp, dop)
         depth_w = far_w - near_w
         if depth_w / scale > z_max - z_min:
             scale = depth_w / (z_max - z_min)
-        z_near = min(max(C + near_w / scale, z_min), z_max - depth_w / scale)
+        # Focus: the slider's distance is where the 2D focal point should appear, in front
+        # of the real panel; the default puts it on the glass.
+        z_target = k * (C if self.focus_set else VIEWER_DISTANCE_M)
+        z_near = min(max(z_target + near_w / scale, z_min), z_max - depth_w / scale)
         z_focal = z_near - near_w / scale
 
         # The focal point goes straight ahead of the rig's eye, z_focal away.
@@ -200,6 +212,22 @@ class _Session:
             # world = S*R*phys + t  with  S*R*p = fp - t
             m.SetElement(row, 3, fp[row] - scale * sum(axes[c][row] * p[c] for c in range(3)))
         self.window.SetPhysicalToWorldMatrix(m)
+
+    def _live_depth(self):
+        """(strength relative to the fitted rig, convergence m) in effect, from the runtime's
+        DXR_HostedDepthRelNow. Depth above 100 % would exceed the comfort budget: it is
+        written back as 100 %, so the shared slider stops at comfort here as everywhere."""
+        now = coupling.read_depth_rel_now(self.host)
+        if not now:
+            self.focus_set = False
+            return 1.0, self.rig["convergenceMeters"]
+        strength, conv = now
+        seeded = self.rig["convergenceMeters"]
+        self.focus_set = conv > 0 and abs(conv - seeded) > 1e-3
+        if strength > 1.001:
+            coupling.write_depth_rel(self.host, 1.0, conv)
+            strength = 1.0
+        return max(strength, 0.0), conv if conv > 0 else seeded
 
     def _view_depths(self, fp, dop):
         """Depth range of what the camera actually sees, along the view direction relative to
