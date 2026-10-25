@@ -36,12 +36,11 @@ from vtkmodules.vtkRenderingOpenXR import (
 
 import coupling
 
-#: Comfort budget, millimetres of on-screen disparity on the 34.4 cm Leia panel
-#: (0.14 % / 0.42 % of its width, calibrated with the user 2026-10-23).
-FRONT_BUDGET_MM = 0.14e-2 * 344.0
-BEHIND_BUDGET_MM = 0.42e-2 * 344.0
-#: Nominal viewer distance from the glass, metres.
-VIEWER_DISTANCE_M = 0.6
+#: Comfort budget, on-screen disparity as a fraction of the panel's width in front of
+#: and behind the glass (calibrated with the user on Leia SR, 2026-10-23). DisplayXR's
+#: display info has no comfort field yet; panel size and viewing distance come from it.
+FRONT_BUDGET = 0.14e-2
+BEHIND_BUDGET = 0.42e-2
 #: Interpupillary distance the rig's ipdFactor scales, metres.
 NOMINAL_IPD_M = 0.063
 #: How long between XR frames, ms (the runtime paces the real rate).
@@ -121,11 +120,12 @@ class _Session:
         near_w, far_w = self._view_depths(fp, dop)
         near_m, far_m = (near_w / scale, far_w / scale) if far_w > near_w else (-0.02, 0.02)
         # Never past the viewer: clamp the near side to half the viewing distance.
-        near_m = max(near_m, -0.5 * VIEWER_DISTANCE_M)
+        panel = coupling.panel_geometry()
+        near_m = max(near_m, -0.5 * panel["viewer_m"])
         far_m = max(far_m, near_m + 1e-4)
-        C = VIEWER_DISTANCE_M
-        f = FRONT_BUDGET_MM * 1e-3
-        g = BEHIND_BUDGET_MM * 1e-3
+        C = panel["viewer_m"]
+        f = FRONT_BUDGET * panel["width_m"]
+        g = BEHIND_BUDGET * panel["width_m"]
 
         def disparity_ratio(shift):
             n, fr = near_m - shift, far_m - shift
@@ -183,12 +183,13 @@ class _Session:
         strength, C = self._live_depth()
         # Rig metres per metre in front of the real panel: the rig's glass is at C, the
         # real one at the viewing distance.
-        k = C / VIEWER_DISTANCE_M
+        panel = coupling.panel_geometry()
+        k = C / panel["viewer_m"]
         scale = half_world / (self.rig["_canvas_m"][1] / 2.0 * k)
         b = self.rig["ipdFactor"] * NOMINAL_IPD_M * strength
         # Budgets in rig metres; below 100 % the slider scales them, so it scales the depth.
-        f = FRONT_BUDGET_MM * 1e-3 * k * min(strength, 1.0)
-        g = BEHIND_BUDGET_MM * 1e-3 * k * min(strength, 1.0)
+        f = FRONT_BUDGET * panel["width_m"] * k * min(strength, 1.0)
+        g = BEHIND_BUDGET * panel["width_m"] * k * min(strength, 1.0)
         z_min = b * C / (b + f)  # nearest distance within the front budget
         z_max = b * C / (b - g) if b > g else float("inf")
         near_w, far_w = self._view_depths(fp, dop)
@@ -197,7 +198,7 @@ class _Session:
             scale = depth_w / (z_max - z_min)
         # Focus: the slider's distance is where the 2D focal point should appear, in front
         # of the real panel; the default puts it on the glass.
-        z_target = k * (C if self.focus_set else VIEWER_DISTANCE_M)
+        z_target = k * (C if self.focus_set else panel["viewer_m"])
         z_near = min(max(z_target + near_w / scale, z_min), z_max - depth_w / scale)
         z_focal = z_near - near_w / scale
 

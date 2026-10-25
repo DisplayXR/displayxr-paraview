@@ -83,6 +83,16 @@ OpenVR.
 With the released runtime, the 3D covers the whole panel, but navigation still works from
 the 2D view (the 3D follows the camera).
 
+The overlay window (#2332 / #2350 / #2353) is a stop-gap for testing and measurements.
+DisplayXR's direction is *texture mode*: ParaView draws the woven image into its own
+render view, so its UI stays on top. Where that isn't possible, the 3D goes in a dedicated
+3D window. A shared host library would run the OpenXR session, and this module would
+become a thin ParaView adapter: camera pinning, the depth fit and the ParaView UI.
+
+Panel size and viewing distance come from DisplayXR's display info (`displayxr-cli status
+--json`). The comfort budget is still a calibrated fraction of panel width, because the
+display info has no comfort field yet.
+
 ## Files
 
 | File | |
