@@ -9,6 +9,11 @@ mouse as usual, and the panels, pipeline and filters keep working. **Exit 3D** r
 2D. Other 3D apps (USD Composer, Substance Modeler, Blender, Slicer...) can show 3D in
 their own windows at the same time.
 
+## In the browser (ParaView Glance)
+
+ParaView's browser viewer, ParaView Glance, runs in 3D in the DisplayXR Browser: see
+[web/README.md](web/README.md).
+
 ## Quick start (Windows)
 
 1. ParaView 6.2 (the zip or installer from paraview.org; the default location is

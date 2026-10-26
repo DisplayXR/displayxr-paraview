@@ -8,3 +8,8 @@ the full text.
 openxr/*.json are derived from ParaView's XRInterface plug-in action manifests
 (Copyright (c) Kitware, Inc., BSD 3-Clause License), with the actions only that
 plug-in's XR menu uses removed.
+
+web/vendor/inline3d/ is the DisplayXR inline-3D web SDK (@displayxr/inline3d 1.46.0,
+DisplayXR/displayxr-web, Apache License 2.0), included unmodified.
+web/serve.py copies ParaView Glance from the user's ParaView install at build time; Glance
+(Copyright (c) Kitware, Inc., BSD 3-Clause License) is not part of this repository.
