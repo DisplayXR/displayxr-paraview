@@ -39,7 +39,8 @@ import gamepad
 
 #: Comfort budget, on-screen disparity as a fraction of the panel's width in front of
 #: and behind the glass (calibrated with the user on Leia SR, 2026-10-23). DisplayXR's
-#: display info has no comfort field yet; panel size and viewing distance come from it.
+#: display info has no comfort field yet (DisplayXR runtime issue #2388 asks for one), so
+#: these stay named constants; panel size and viewing distance come from the display info.
 FRONT_BUDGET = 0.14e-2
 BEHIND_BUDGET = 0.42e-2
 #: Interpupillary distance the rig's ipdFactor scales, metres.
@@ -316,6 +317,11 @@ class _Session:
     # -- lifecycle ----------------------------------------------------------------------
 
     def start(self):
+        panel = coupling.panel_geometry()
+        _log(
+            "panel %.3f x %.3f m, %d x %d px, viewer at %.2f m (%s)"
+            % (panel["width_m"], panel["height_m"], panel["width_px"], panel["height_px"], panel["viewer_m"], panel["source"])
+        )
         self.rig = {"_canvas_m": list(self._canvas_metres())}
         self.rig = self._fit_depth()
         coupling.write_rig_profile({k: v for k, v in self.rig.items() if not k.startswith("_")})

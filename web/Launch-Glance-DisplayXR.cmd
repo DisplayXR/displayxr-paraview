@@ -2,7 +2,8 @@
 REM ParaView Glance (the browser viewer shipped with ParaView) in the DisplayXR Browser, in 3D.
 REM Builds web\_site from your ParaView install, serves it on 127.0.0.1:8765 and opens it.
 REM Usage: Launch-Glance-DisplayXR.cmd [dataset name in web\data, default disk_out_ref.vtp]
-REM Optional: set PARAVIEW_HOME to your ParaView install; set DXR_BROWSER to the browser exe.
+REM Optional: set PARAVIEW_HOME (install folder) or PARAVIEW_EXE to pick a ParaView (default: the
+REM newest installed); set DXR_BROWSER to the browser exe (default: the installed DisplayXR Browser).
 setlocal
 set "HERE=%~dp0"
 set "DATA=%~1"

@@ -72,7 +72,7 @@ function cameraFrame(cam) {
   return { m, pos, dop, right, up, dist: Math.hypot(...sub(fp, pos)) };
 }
 
-// ---------------------------------------------------------------- depth fit (PLAYBOOK §3)
+// ---------------------------------------------------------------- depth fit (comfort budget)
 // Depth range of what the camera SEES: a 5x5x5 grid over the visible prop bounds, kept to the
 // points inside the frustum. Then the glass where the front and behind limits meet, and the
 // eye separation that fills the budget there: p(z) = K (1 - g/z) of the tile width.

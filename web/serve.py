@@ -22,16 +22,31 @@ SITE = os.path.join(HERE, "_site")
 TAG = '<script type="module" src="displayxr/src/displayxr-glance.js"></script>'
 
 
+def _version(path):
+    """(major, minor, patch) from a share/paraview-<ver> path, for picking the newest."""
+    m = re.search(r"paraview-(\d+)\.(\d+)(?:\.(\d+))?", path, re.IGNORECASE)
+    return tuple(int(x or 0) for x in m.groups()) if m else (0, 0, 0)
+
+
 def find_glance(pv):
+    """Glance's www folder in the given ParaView install, else in PARAVIEW_EXE / PARAVIEW_HOME,
+    else in the newest ParaView found where the launcher looks (tools/Find-ParaView.ps1)."""
+    exe = os.environ.get("PARAVIEW_EXE")
+    pv = pv or os.environ.get("PARAVIEW_HOME") or (os.path.dirname(os.path.dirname(exe)) if exe else None)
+    roots = [pv] if pv else (
+        glob.glob(os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "ParaView *"))
+        + glob.glob(os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "ParaView*"))
+        + glob.glob(os.path.expanduser(os.path.join("~", "ParaView-*")))
+    )
     cands = []
-    if pv:
-        cands += glob.glob(os.path.join(pv, "share", "paraview-*", "web", "glance", "www"))
-    cands += glob.glob(os.path.expanduser("~/ParaView-*/share/paraview-*/web/glance/www"))
-    cands += glob.glob(r"C:\Program Files\ParaView*\share\paraview-*\web\glance\www")
-    for c in sorted(cands, reverse=True):
+    for root in roots:
+        cands += glob.glob(os.path.join(root, "share", "paraview-*", "web", "glance", "www"))
+    for c in sorted(cands, key=_version, reverse=True):
         if os.path.isfile(os.path.join(c, "index.html")):
             return c
-    sys.exit("ParaView Glance not found: pass --paraview <ParaView install dir>")
+    where = pv or "the installed ParaViews"
+    sys.exit(f"ParaView Glance not found in {where}: pass --paraview <ParaView install dir> "
+             "or set PARAVIEW_HOME")
 
 
 def build(pv):

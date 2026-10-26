@@ -22,8 +22,9 @@ VIEW_RECT_PROP = "DXR_HostedViewRect"
 #: re-reads the file for every new OpenXR instance, i.e. every Start 3D.
 RIG_ENV = "DXR_LEGACY_CAMERA_RIG"
 
-#: Leia demo panel, used when displayxr-cli is unavailable: 34.4 x 21.5 cm, 3840 x 2400 px,
-#: viewed from 0.6 m.
+#: Leia demo panel, used only when the display info can't be read (displayxr-cli missing or
+#: failing): 34.4 x 21.5 cm, 3840 x 2400 px, viewed from 0.6 m. panel_geometry() reads the
+#: real values first and marks a fallback with source="fallback".
 DEFAULT_PANEL = {"width_m": 0.344, "height_m": 0.215, "width_px": 3840, "height_px": 2400, "viewer_m": 0.6}
 
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -90,15 +91,25 @@ def write_depth_rel(hwnd, strength, convergence_m):
         _user32.SetPropW(hwnd, DEPTH_REL_PROP, v)
 
 
+def displayxr_cli():
+    """The installed DisplayXR CLI. Only when the launcher opted into a dev runtime
+    (DXR_RUNTIME=dev) is the displayxr-cli.exe next to that runtime's manifest used."""
+    if os.environ.get("DXR_RUNTIME", "").lower() == "dev":
+        dev = os.path.join(os.path.dirname(os.environ.get("XR_RUNTIME_JSON", "")), "displayxr-cli.exe")
+        if os.path.isfile(dev):
+            return dev
+    return os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "DisplayXR", "Runtime", "displayxr-cli.exe")
+
+
 def panel_geometry():
     """Panel size (metres, pixels) and nominal viewing distance (metres) from DisplayXR's
     display info (displayxr-cli, cached), else the Leia demo panel."""
     global _panel
     if _panel is None:
         p = dict(DEFAULT_PANEL)
-        cli = os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "DisplayXR", "Runtime", "displayxr-cli.exe")
+        p["source"] = "fallback"
         try:
-            out = subprocess.run([cli, "status", "--json"], capture_output=True, timeout=5, creationflags=0x08000000).stdout
+            out = subprocess.run([displayxr_cli(), "status", "--json"], capture_output=True, timeout=5, creationflags=0x08000000).stdout
             screen = json.loads(out)["screens"][0]
             layout = screen.get("layout") or {}
             p = {
@@ -107,6 +118,7 @@ def panel_geometry():
                 "width_px": screen["native"]["width"],
                 "height_px": screen["native"]["height"],
                 "viewer_m": (layout.get("nominal_viewer_m") or {}).get("z") or DEFAULT_PANEL["viewer_m"],
+                "source": "display info",
             }
         except Exception:
             pass

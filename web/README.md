@@ -6,7 +6,11 @@ stays in Glance's 3D view, inside the page, next to anything else that is 3D on 
 
 ## Quick start (Windows)
 
-1. ParaView 6.2 (for its Glance copy and `pvpython`), Python 3, the DisplayXR Browser.
+1. ParaView (tested with 6.2; for its Glance copy and `pvpython`), Python 3, the DisplayXR
+   Browser. `serve.py` uses the newest ParaView installed (`%ProgramFiles%\ParaView *`,
+   `%LOCALAPPDATA%\Programs\ParaView*` or a zip unpacked as `%USERPROFILE%\ParaView-*`);
+   `--paraview <dir>`, `PARAVIEW_HOME` or `PARAVIEW_EXE` pick another. `DXR_BROWSER` overrides
+   the browser (default: the installed DisplayXR Browser).
 2. `web\Launch-Glance-DisplayXR.cmd` (demo: flow around a heated disk), or
    `web\Launch-Glance-DisplayXR.cmd depth_spheres.vtp`. Any file Glance opens (Open button,
    drag and drop) works the same way.
@@ -30,7 +34,9 @@ On any other browser Glance is unchanged (2D). `?dxr=off` in the URL turns the a
   eyes composed with the current camera). The glass and eye separation come from the depth of
   what the camera sees (a 5×5×5 grid over the visible bounds, kept to the frustum): the glass
   where the front and behind limits meet, the separation that fills the budget,
-  0.14 % in front / 0.42 % behind of the **panel** width (`src/coupling.js`).
+  0.14 % in front / 0.42 % behind of the **panel** width (`src/coupling.js`). The panel size
+  and viewing distance come from the display info; the budget stays a named constant until
+  the display info carries one (DisplayXR runtime issue #2388).
 - Everything that is not a contract (Glance's `glanceInstance` global, the `View3D` proxy name,
   vtk.js camera internals such as `physicalScale`) is in `src/coupling.js`.
 

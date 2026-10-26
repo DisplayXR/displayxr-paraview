@@ -2,8 +2,10 @@
 // None of it is a contract: Glance or vtk.js updates may change any of it.
 
 // --- DisplayXR display values -------------------------------------------------------------
-// Comfort budget as a fraction of the WHOLE panel's width (PLAYBOOK §3; DisplayXR #2388 asks
-// for it in display info). Physical, so a small tile gets a larger share of its own width.
+// Comfort budget as a fraction of the WHOLE panel's width. A named constant until the display
+// info carries it (DisplayXR runtime issue #2388); rationale:
+// https://github.com/DisplayXR/displayxr-runtime/discussions/2331#discussioncomment-19185165
+// Physical, so a small tile gets a larger share of its own width.
 export const COMFORT_FRONT_FRAC = 0.0014; // in front of the glass
 export const COMFORT_BEHIND_FRAC = 0.0042; // behind the glass
 // The SDK's displayMetrics() fills the panel size from XRDisplayInfo; this is only its fallback.
@@ -14,7 +16,7 @@ export const EYE_SEPARATION_M = 0.063; // the camera rig's ipdFactor unit (63 mm
 export const DEPTH_STEP = 0.25;
 export const DEPTH_MAX = 1.0;
 
-// --- ParaView Glance internals (Glance 4.25.0, shipped in ParaView 6.2 share/paraview-6.2/web/glance)
+// --- ParaView Glance internals (observed with Glance 4.25.0 from ParaView 6.2, share/paraview-<ver>/web/glance)
 // `glanceInstance` is a top-level const in Glance's index.html; the module script reads it by name.
 export function glanceProxyManager() {
   // eslint-disable-next-line no-undef
