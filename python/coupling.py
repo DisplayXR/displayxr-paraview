@@ -85,6 +85,22 @@ def read_depth_rel_now(hwnd):
     return (v & 0xFFFF) / 1000.0, ((v >> 16) & 0xFFFF) / 1000.0
 
 
+def read_depth_rel(hwnd):
+    """(relative strength, convergence m) the shared slider asks for, or None."""
+    v = (_user32.GetPropW(hwnd, DEPTH_REL_PROP) or 0) if hwnd else 0
+    if not v:
+        return None
+    return (v & 0xFFFF) / 1000.0, ((v >> 16) & 0xFFFF) / 1000.0
+
+
+def write_depth_rel_now(hwnd, strength, convergence_m):
+    """Texture mode: ParaView applies the depth itself, so it publishes what is in effect
+    (the runtime does this for the overlay embed) and the shared slider follows it."""
+    if hwnd:
+        v = min(int(round(strength * 1000)), 0xFFFF) | (min(int(round(convergence_m * 1000)), 0xFFFF) << 16)
+        _user32.SetPropW(hwnd, DEPTH_REL_NOW_PROP, v)
+
+
 def write_depth_rel(hwnd, strength, convergence_m):
     if hwnd:
         v = min(int(round(strength * 1000)), 0xFFFF) | (min(int(round(convergence_m * 1000)), 0xFFFF) << 16)

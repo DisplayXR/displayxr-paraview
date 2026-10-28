@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 web/_site/
+python/bin/
+native/build/

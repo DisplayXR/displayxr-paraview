@@ -414,6 +414,115 @@ class _Session:
         simple.Render(self.view)
 
 
+class _ViewportSession(_Session):
+    """Texture mode: the 3D is drawn inside ParaView's own render view (displayxr_viewport).
+    No OpenXR render window and nothing over ParaView; the host core fits the eye
+    separation to the comfort budget from the glass and the content depth given each
+    frame, and the vendor plug-in weaves."""
+
+    def start(self):
+        import displayxr_viewport
+
+        panel = coupling.panel_geometry()
+        _log(
+            "panel %.3f x %.3f m, %d x %d px, viewer at %.2f m (%s); texture mode"
+            % (panel["width_m"], panel["height_m"], panel["width_px"], panel["height_px"], panel["viewer_m"], panel["source"])
+        )
+        simple.Render(self.view)
+        try:
+            self.vp = displayxr_viewport.ViewportSession(self.view, self.host, self._origin)
+            err = self.vp.start()
+        except OSError as e:
+            err = "could not load the DisplayXR host core (%s)" % (e,)
+        if err:
+            _log("3D did not start: " + err)
+            return False
+        self.vp.set_depth(self.depth_strength)
+        self.applied_depth = None
+        self.nav = gamepad.Navigator(self.view, self.host)
+        self.last_tick = time.time()
+        self.observer = self.pv_interactor.AddObserver(vtkCommand.TimerEvent, self._tick)
+        self.timer_id = self.pv_interactor.CreateRepeatingTimer(16)
+        coupling.set_status("3D active")
+        _log("3D active (in ParaView's render view)")
+        return True
+
+    def _origin(self):
+        rect = coupling.read_view_rect()
+        return (rect[0], rect[1]) if rect else None
+
+    def _glass(self, cam):
+        """Glass distance from the camera: ParaView's focal point, kept inside the visible
+        content; the shared slider's Focus scales it (0.60 m = the focal point on the glass)."""
+        w, h = self.view.ViewSize
+        self.rig = {"_canvas_m": [max(w, 1), max(h, 1)]}  # aspect for the frustum test
+        near, far = self._view_depths(cam.GetFocalPoint(), _normalize(cam.GetDirectionOfProjection()))
+        d = cam.GetDistance()
+        content = (d + near, d + far) if far > near else None
+        g = min(max(d, content[0]), content[1]) if content else d
+        return g * self.focus_scale, content
+
+    def _follow_slider(self):
+        """The shared Depth / Focus slider writes DXR_HostedDepthRel on ParaView's window;
+        apply it (depth capped at 100 %) and publish what is in effect as ...RelNow."""
+        rel = coupling.read_depth_rel(self.host)
+        strength, conv = rel if rel else (1.0, coupling.panel_geometry()["viewer_m"])
+        strength = min(max(strength, 0.0), 1.0) * self.depth_strength
+        viewer = coupling.panel_geometry()["viewer_m"]
+        self.focus_scale = conv / viewer if conv > 0 else 1.0
+        if (strength, self.focus_scale) != self.applied_depth:
+            self.applied_depth = (strength, self.focus_scale)
+            self.vp.set_depth(strength)
+            coupling.write_depth_rel_now(self.host, min(strength, 1.0), conv if conv > 0 else viewer)
+
+    def _tick(self, obj, event):
+        if getattr(self, "vp", None) is None:
+            return
+        try:
+            now = time.time()
+            self.nav.update(now - self.last_tick)
+            self.last_tick = now
+            self._follow_slider()
+            cam = self.pv_renderer.GetActiveCamera()
+            glass, content = self._glass(cam)
+            self.vp.set_camera(cam, glass, content)
+            if self.vp.tick(cam):
+                self.frames += 1
+            if self.frames and self.frames % 120 == 0:
+                d = self.vp.depth()
+                _log("depth: glass %.3g, front %.3f %%, behind %.3f %%, strength %.2f; drawn %d (%s)"
+                     % (d.glass, d.front_pct, d.behind_pct, d.strength, self.vp.drawn(), self.vp.gl_info()))
+            if self.frames % 30 == 0 and not self.vp.running():
+                _log("3D session ended: " + self.vp.status())
+                stop()
+        except Exception as e:  # never let an exception escape into ParaView's timer
+            _log("frame failed: %r" % (e,))
+            stop()
+
+    def stop(self):
+        if self.timer_id is not None:
+            self.pv_interactor.DestroyTimer(self.timer_id)
+            self.timer_id = None
+        if self.observer is not None:
+            self.pv_interactor.RemoveObserver(self.observer)
+            self.observer = None
+        vp, self.vp = getattr(self, "vp", None), None
+        if vp is not None:
+            vp.stop()
+        coupling.set_status("3D ready")
+        secs = max(time.time() - self.started, 1e-3)
+        _log("Exit 3D after %d eye pairs (%.0f pairs/s)" % (self.frames, self.frames / secs))
+        simple.Render(self.view)
+
+
+def texture_mode():
+    """3D inside ParaView's render view (needs native/build.bat and runtime v2.55+), unless
+    DXR_PV_MODE=overlay asks for the OpenXR render window (dev-runtime overlay embed)."""
+    import displayxr_viewport
+
+    return displayxr_viewport.available() and os.environ.get("DXR_PV_MODE", "viewport") != "overlay"
+
+
 _session = None
 
 
@@ -427,7 +536,7 @@ def start(depth_strength=1.0):
         stop()
     view = simple.GetActiveViewOrCreate("RenderView")
     simple.Render(view)
-    _session = _Session(view, depth_strength)
+    _session = (_ViewportSession if texture_mode() else _Session)(view, depth_strength)
     if not _session.start():
         _session = None
         return False
