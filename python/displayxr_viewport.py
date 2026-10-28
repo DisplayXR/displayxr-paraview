@@ -216,8 +216,9 @@ class ViewportSession:
         return d
 
     def set_depth(self, strength):
-        """Depth strength (1.0 = the comfort budget filled); above 1.0 is capped by the core."""
-        self.host.dxrh_set_depth(float(strength), 0)
+        """Depth strength (1.0 = the comfort budget filled). Above 1.0 is an explicit
+        opt-in from the user's slider: stronger than the calibrated budget."""
+        self.host.dxrh_set_depth(float(strength), 1 if strength > 1.0 else 0)
 
     # -- per tick ---------------------------------------------------------
     def _last_renderer(self):

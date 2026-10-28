@@ -438,7 +438,6 @@ class _ViewportSession(_Session):
             _log("3D did not start: " + err)
             return False
         self.vp.set_depth(self.depth_strength)
-        self.applied_depth = None
         self.nav = gamepad.Navigator(self.view, self.host)
         self.last_tick = time.time()
         self.observer = self.pv_interactor.AddObserver(vtkCommand.TimerEvent, self._tick)
@@ -452,28 +451,28 @@ class _ViewportSession(_Session):
         return (rect[0], rect[1]) if rect else None
 
     def _glass(self, cam):
-        """Glass distance from the camera: ParaView's focal point, kept inside the visible
-        content; the shared slider's Focus scales it (0.60 m = the focal point on the glass)."""
+        """Glass distance from the camera: where the visible content fills the front and the
+        behind budget together. Disparity goes as (1 - g/z), so the near end n uses g/n - 1
+        and the far end f uses 1 - g/f; their ratio = FRONT_BUDGET / BEHIND_BUDGET gives
+        g = (1 + r) / (r/n + 1/f), r = BEHIND/FRONT. The shared slider's Focus scales it."""
         w, h = self.view.ViewSize
         self.rig = {"_canvas_m": [max(w, 1), max(h, 1)]}  # aspect for the frustum test
         near, far = self._view_depths(cam.GetFocalPoint(), _normalize(cam.GetDirectionOfProjection()))
         d = cam.GetDistance()
-        content = (d + near, d + far) if far > near else None
-        g = min(max(d, content[0]), content[1]) if content else d
-        return g * self.focus_scale, content
+        if far <= near:
+            return d * self.focus_scale, None
+        n, f = max(d + near, 1e-3 * d), d + far
+        r = BEHIND_BUDGET / FRONT_BUDGET
+        g = (1.0 + r) / (r / n + 1.0 / f)
+        return g * self.focus_scale, (n, f)
 
     def _follow_slider(self):
-        """The shared Depth / Focus slider writes DXR_HostedDepthRel on ParaView's window;
-        apply it (depth capped at 100 %) and publish what is in effect as ...RelNow."""
+        """The host core applies the shared slider's Depth itself (capped at the comfort
+        budget, like every app) and publishes ...RelNow. Its Focus moves the glass here:
+        0.60 m = the content-fitted glass, farther sinks the scene."""
         rel = coupling.read_depth_rel(self.host)
-        strength, conv = rel if rel else (1.0, coupling.panel_geometry()["viewer_m"])
-        strength = min(max(strength, 0.0), 1.0) * self.depth_strength
-        viewer = coupling.panel_geometry()["viewer_m"]
-        self.focus_scale = conv / viewer if conv > 0 else 1.0
-        if (strength, self.focus_scale) != self.applied_depth:
-            self.applied_depth = (strength, self.focus_scale)
-            self.vp.set_depth(strength)
-            coupling.write_depth_rel_now(self.host, min(strength, 1.0), conv if conv > 0 else viewer)
+        conv = rel[1] if rel else 0.0
+        self.focus_scale = conv / coupling.panel_geometry()["viewer_m"] if conv > 0 else 1.0
 
     def _tick(self, obj, event):
         if getattr(self, "vp", None) is None:
@@ -526,11 +525,18 @@ def texture_mode():
 _session = None
 
 
-def start(depth_strength=1.0):
+def start(depth_strength=None):
     """Start 3D for the active render view, its depth fitted to the display's comfort budget
     for the current view. While 3D is active, Start 3D again re-fits the depth (after zooming
-    a lot, or to another view). depth_strength scales the fitted depth."""
+    a lot, or to another view). depth_strength scales the fitted depth: 1.0 (the default)
+    fills the comfort budget; DXR_PV_DEPTH sets it for Start 3D, e.g. 1.4 for stronger 3D
+    (texture mode allows up to 2.0)."""
     global _session
+    if depth_strength is None:
+        try:
+            depth_strength = float(os.environ.get("DXR_PV_DEPTH", "1.0"))
+        except ValueError:
+            depth_strength = 1.0
     if _session is not None:
         _log("re-fitting depth to the current view")
         stop()
@@ -551,7 +557,7 @@ def stop():
     s.stop()
 
 
-def toggle(depth_strength=1.0):
+def toggle(depth_strength=None):
     if _session is None:
         start(depth_strength)
     else:
