@@ -9,6 +9,11 @@ mouse as usual, and the panels, pipeline and filters keep working. **Exit 3D** r
 2D. Other 3D apps (USD Composer, Substance Modeler, Blender, Slicer...) can show 3D in
 their own windows at the same time.
 
+> **Preview release (v0.x). Research use only, not for diagnosis.** Research and
+> visualization software; not a medical device. The module will move onto the shared
+> DisplayXR host library in a later release. No model weights or patient data are bundled.
+> Tested on a newer Leia SR runtime; older Leia SR versions are being checked.
+
 ## In the browser (ParaView Glance)
 
 ParaView's browser viewer, ParaView Glance, runs in 3D in the DisplayXR Browser: see
