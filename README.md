@@ -24,8 +24,8 @@ ParaView's browser viewer, ParaView Glance, runs in 3D in the DisplayXR Browser:
 1. ParaView (tested with 6.2), the zip or installer from paraview.org. The launcher uses the
    newest one it finds (see *Launcher options* below).
 2. The DisplayXR runtime (v2.55 or later) with its Leia SR plug-in, and PowerShell 7 (`pwsh`).
-3. Build the native helpers once: `nativeuild.bat` (Visual Studio 2022, x64 C++; writes
-   `pythonin\`). Without them, Start 3D falls back to the OpenXR window (see *Runtime*).
+3. Build the native helpers once: `native\build.bat` (Visual Studio 2022, x64 C++; writes
+   `python\bin\`). Without them, Start 3D falls back to the OpenXR window (see *Runtime*).
 4. Run `Launch-ParaView-DisplayXR.cmd` (demo: flow around a heated disk), or
    `Launch-ParaView-DisplayXR.cmd your.pvsm` for your own state or data.
 5. Click **Start 3D** on the Macros toolbar.
@@ -104,7 +104,7 @@ ParaView (`DXR_INPUT_GAMEPAD_NAV=0`), because it would move the 3D away from Par
 **Texture mode (default).** `python/displayxr_viewport.py` renders two off-axis eyes with
 ParaView's own renderer (plain `vtkCamera`s with an explicit projection from the runtime's
 eye tangents). The host core (`native/core`, the app-neutral core shared with the DisplayXR
-adapters for 3D Slicer, MotionBuilder, Nuke and Houdini, built as `pythonin\displayxr_host.dll`)
+adapters for 3D Slicer, MotionBuilder, Nuke and Houdini, built as `python\bin\displayxr_host.dll`)
 hands them to the runtime through `XR_DXR_win32_window_binding` and fits the eye
 separation to the comfort budget from the screen plane and the visible depth that ParaView
 reports each frame. The display's plug-in weaves, and `displayxr_paraview_gl.dll` blits the
