@@ -290,7 +290,6 @@ class ViewportSession:
         return True
 
     def _render_pair(self, eyes, serial, pv_cam):
-        import numpy as np
         from vtkmodules.util.numpy_support import vtk_to_numpy
         w, h = (int(v) for v in self.rw.GetActualSize())
         if w <= 0 or h <= 0:
@@ -301,7 +300,7 @@ class ViewportSession:
         rens = self.rw.GetRenderers()
         sharing = [rens.GetItemAsObject(i) for i in range(rens.GetNumberOfItems())
                    if rens.GetItemAsObject(i).GetActiveCamera() is pv_cam]
-        imgs = []
+        imgs = []  # (vtk array, last-row address) per eye; the array keeps the pixels alive
         self._in_eyes = True
         try:
             for i in range(2):
@@ -316,12 +315,17 @@ class ViewportSession:
                 self.rw.Render()
                 arr = vtkUnsignedCharArray()
                 self.rw.GetRGBACharPixelData(0, 0, w - 1, h - 1, 0, arr)
-                imgs.append(np.ascontiguousarray(vtk_to_numpy(arr).reshape(h, w, 4)[::-1]))  # top row first
+                px = vtk_to_numpy(arr)  # bottom row first, tightly packed: w * h * 4 bytes
+                if px.size != w * h * 4 or not px.flags["C_CONTIGUOUS"]:
+                    raise RuntimeError("eye readback is %d bytes, expected %d" % (px.size, w * h * 4))
+                imgs.append((arr, px.ctypes.data + (h - 1) * w * 4))
         finally:
             for r in sharing:
                 r.SetActiveCamera(pv_cam)
             self.ren.ResetCameraClippingRange()
             self._in_eyes = False
-        self.host.dxrh_submit_rgba8(imgs[0].ctypes.data, imgs[1].ctypes.data, w, h, w * 4, serial)
+        # Last row + negative stride: the core reads the bottom-up readback top row
+        # first, so no flipped copy is made here.
+        self.host.dxrh_submit_rgba8(imgs[0][1], imgs[1][1], w, h, -w * 4, serial)
         self.pairs += 1
         self.rw.Render()  # ParaView's own camera; EndEvent draws the woven frame
