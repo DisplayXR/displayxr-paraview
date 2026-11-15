@@ -442,6 +442,7 @@ class _ViewportSession(_Session):
         self.vp.set_depth(self.depth_strength)
         self.nav = gamepad.Navigator(self.view, self.host)
         self.last_tick = time.time()
+        self.ticks = 0  # timer ticks; self.frames only counts rendered pairs
         self.observer = self.pv_interactor.AddObserver(vtkCommand.TimerEvent, self._tick)
         self.timer_id = self.pv_interactor.CreateRepeatingTimer(16)
         coupling.set_status("3D active")
@@ -493,7 +494,9 @@ class _ViewportSession(_Session):
                 d = self.vp.depth()
                 _log("depth: glass %.3g, front %.3f %%, behind %.3f %%, strength %.2f; drawn %d (%s)"
                      % (d.glass, d.front_pct, d.behind_pct, d.strength, self.vp.drawn(), self.vp.gl_info()))
-            if self.frames % 30 == 0 and not self.vp.running():
+            # On ticks, not pairs: once the core's loop has ended no pair renders again.
+            self.ticks += 1
+            if self.ticks % 30 == 0 and not self.vp.running():
                 _log("3D session ended: " + self.vp.status())
                 stop()
         except Exception as e:  # never let an exception escape into ParaView's timer
