@@ -183,13 +183,15 @@ class ViewportSession:
         self._observe()
         return None
 
-    def stop(self):
+    def stop(self, render=True):
         self.host.dxrh_stop()
-        # One more render with the observer on releases the GL objects on VTK's context.
-        try:
-            self.rw.Render()
-        except Exception:
-            pass
+        # One more render with the observer on releases the GL objects on VTK's context
+        # (skipped at exit: the process is going away with the context).
+        if render:
+            try:
+                self.rw.Render()
+            except Exception:
+                pass
         if self._obs is not None:
             self._obs_ren.RemoveObserver(self._obs)
         self._obs = self._obs_ren = None
