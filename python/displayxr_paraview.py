@@ -19,6 +19,7 @@ What it does differently from ParaView's XRInterface ("Send to XR"):
 Runtime internals this relies on are listed in coupling.py ("not a contract").
 """
 
+import atexit
 import math
 import os
 import time
@@ -394,7 +395,7 @@ class _Session:
             _log("frame failed: %r" % (e,))
             stop()
 
-    def stop(self):
+    def stop(self, render=True):
         if self.timer_id is not None:
             self.pv_interactor.DestroyTimer(self.timer_id)
             self.timer_id = None
@@ -411,7 +412,8 @@ class _Session:
         coupling.set_status("3D ready")
         secs = max(time.time() - self.started, 1e-3)
         _log("Exit 3D after %d frames (%.0f fps)" % (self.frames, self.frames / secs))
-        simple.Render(self.view)
+        if render:
+            simple.Render(self.view)
 
 
 class _ViewportSession(_Session):
@@ -498,7 +500,7 @@ class _ViewportSession(_Session):
             _log("frame failed: %r" % (e,))
             stop()
 
-    def stop(self):
+    def stop(self, render=True):
         if self.timer_id is not None:
             self.pv_interactor.DestroyTimer(self.timer_id)
             self.timer_id = None
@@ -507,11 +509,12 @@ class _ViewportSession(_Session):
             self.observer = None
         vp, self.vp = getattr(self, "vp", None), None
         if vp is not None:
-            vp.stop()
+            vp.stop(render)
         coupling.set_status("3D ready")
         secs = max(time.time() - self.started, 1e-3)
         _log("Exit 3D after %d eye pairs (%.0f pairs/s)" % (self.frames, self.frames / secs))
-        simple.Render(self.view)
+        if render:
+            simple.Render(self.view)
 
 
 def texture_mode():
@@ -555,6 +558,24 @@ def stop():
         return
     s, _session = _session, None
     s.stop()
+
+
+def _stop_at_exit():
+    """Quitting ParaView with 3D active: stop the session so the host core's thread is
+    joined before its DLL unloads. No final render (ParaView may be tearing its views and
+    GL context down); does nothing if 3D was already stopped."""
+    global _session
+    if _session is None:
+        return
+    s, _session = _session, None
+    try:
+        s.stop(render=False)
+    except Exception as e:
+        _log("stop at exit failed: %r" % (e,))
+
+
+# atexit rather than Qt's aboutToQuit: ParaView's Python may have no Qt bindings.
+atexit.register(_stop_at_exit)
 
 
 def toggle(depth_strength=None):
